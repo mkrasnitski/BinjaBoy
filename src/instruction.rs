@@ -253,7 +253,10 @@ impl Instruction {
         use Instruction::*;
         match self {
             Nop => "NOP",
-            Ld(_) => "LD",
+            Ld(ld_type) => match ld_type {
+                LdType::AFromIoReg(_) | LdType::IoRegFromA(_) => "LDH",
+                _ => "LD",
+            },
 
             Add(_) | AddHL(_) | AddSP(_) => "ADD",
             Adc(_) => "ADC",
@@ -323,12 +326,12 @@ impl fmt::Debug for Instruction {
                 LdType::AFromInd(ind) => write!(f, "LD A, {ind:?}"),
                 LdType::IndFromA(ind) => write!(f, "LD {ind:?}, A"),
                 LdType::AFromIoReg(io) => match io {
-                    Io::C => write!(f, "LD A, (FF00 + C)"),
-                    Io::Imm(val) => write!(f, "LD A, ($FF00 + ${val:02x})"),
+                    Io::C => write!(f, "LDH A, (FF00 + C)"),
+                    Io::Imm(val) => write!(f, "LDH A, ($FF00 + ${val:02x})"),
                 },
                 LdType::IoRegFromA(io) => match io {
-                    Io::C => write!(f, "LD (FF00 + C), A"),
-                    Io::Imm(val) => write!(f, "LD ($FF00 + ${val:02x}), A"),
+                    Io::C => write!(f, "LDH (FF00 + C), A"),
+                    Io::Imm(val) => write!(f, "LDH ($FF00 + ${val:02x}), A"),
                 },
                 LdType::AFromMem(val) => write!(f, "LD A, (${val:04x})"),
                 LdType::MemFromA(val) => write!(f, "LD (${val:04x}), A"),
