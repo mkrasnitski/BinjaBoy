@@ -442,7 +442,7 @@ impl ToTokens for Instruction {
                         tokens.extend(dest.to_tokens(addr));
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
-                            BnString::new(format!("{val:#02x}")),
+                            BnString::new(format!("{val:#04X}")),
                             InstructionTextTokenContents::Integer(*val as u64),
                         ));
                     }
@@ -450,7 +450,7 @@ impl ToTokens for Instruction {
                         tokens.extend(dest.to_tokens(addr));
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
-                            BnString::new(format!("{val:#04x}")),
+                            BnString::new(format!("{val:#06X}")),
                             InstructionTextTokenContents::Integer(*val as u64),
                         ));
                     }
@@ -483,7 +483,7 @@ impl ToTokens for Instruction {
                                 InstructionTextTokenContents::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                BnString::new(format!("{val:#04X}")),
+                                BnString::new(format!("{val:#06X}")),
                                 InstructionTextTokenContents::PossibleAddress(*val as u64),
                             ),
                             InstructionTextToken::new(
@@ -499,7 +499,7 @@ impl ToTokens for Instruction {
                                 InstructionTextTokenContents::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                BnString::new(format!("{val:#04X}")),
+                                BnString::new(format!("{val:#06X}")),
                                 InstructionTextTokenContents::PossibleAddress(*val as u64),
                             ),
                             InstructionTextToken::new(
@@ -517,7 +517,7 @@ impl ToTokens for Instruction {
                                 InstructionTextTokenContents::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                BnString::new(format!("{val:#04X}")),
+                                BnString::new(format!("{val:#06X}")),
                                 InstructionTextTokenContents::PossibleAddress(*val as u64),
                             ),
                             InstructionTextToken::new(
@@ -624,7 +624,7 @@ impl ToTokens for Instruction {
                     .wrapping_add(self.length() as u16)
                     .wrapping_add_signed(*val as i16);
                 tokens.push(InstructionTextToken::new(
-                    BnString::new(format!("{addr:#04X}")),
+                    BnString::new(format!("{addr:#06X}")),
                     InstructionTextTokenContents::PossibleAddress(addr as u64),
                 ));
             }
@@ -635,7 +635,7 @@ impl ToTokens for Instruction {
                     tokens.extend(separator.clone());
                 }
                 tokens.push(InstructionTextToken::new(
-                    BnString::new(format!("{val:#04X}")),
+                    BnString::new(format!("{val:#06X}")),
                     InstructionTextTokenContents::PossibleAddress(*val as u64),
                 ))
             }
@@ -646,7 +646,7 @@ impl ToTokens for Instruction {
             Rst(val) => {
                 tokens.extend(spaces.clone());
                 tokens.push(InstructionTextToken::new(
-                    BnString::new(format!("{val:#04X}")),
+                    BnString::new(format!("{val:#06X}")),
                     InstructionTextTokenContents::PossibleAddress(*val as u64),
                 ))
             }
@@ -876,7 +876,7 @@ impl ToTokens for Io {
                 ),
             ],
             Io::Imm(val) => vec![InstructionTextToken::new(
-                BnString::new(format!("{:#04X}", 0xFF00 + *val as u16)),
+                BnString::new(format!("{:#06X}", 0xFF00 + *val as u16)),
                 InstructionTextTokenContents::PossibleAddress(0xFF00 + *val as u64),
             )],
         };
@@ -916,7 +916,7 @@ impl ToTokens for AluSrc {
         match self {
             AluSrc::R8(r8) => r8.to_tokens(addr),
             AluSrc::Imm(val) => vec![InstructionTextToken::new(
-                BnString::new(format!("{val:#02x}")),
+                BnString::new(format!("{val:#04x}")),
                 InstructionTextTokenContents::Integer(*val as u64),
             )],
         }
