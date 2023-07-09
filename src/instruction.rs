@@ -306,7 +306,7 @@ impl Instruction {
             Di => "DI",
             Ei => "EI",
 
-            Illegal => "ILLEGAL",
+            Illegal => "??",
         }
     }
 }
@@ -398,7 +398,7 @@ impl fmt::Debug for Instruction {
             Di => write!(f, "DI"),
             Ei => write!(f, "EI"),
 
-            Illegal => write!(f, "ILLEGAL"),
+            Illegal => write!(f, "??"),
         }
     }
 }
@@ -407,15 +407,21 @@ impl ToTokens for Instruction {
     fn to_tokens(&self, addr: u64) -> Vec<InstructionTextToken> {
         use Instruction::*;
 
-        let space =
-            InstructionTextToken::new(BnString::new(" "), InstructionTextTokenContents::Text);
+        let num_spaces = 8 - self.mnemonic().len();
+        let mut spaces = Vec::with_capacity(num_spaces);
+        for _ in 0..num_spaces {
+            spaces.push(InstructionTextToken::new(
+                BnString::new(" "),
+                InstructionTextTokenContents::Text,
+            ));
+        }
 
         let separator = vec![
             InstructionTextToken::new(
                 BnString::new(","),
                 InstructionTextTokenContents::OperandSeparator,
             ),
-            space.clone(),
+            InstructionTextToken::new(BnString::new(" "), InstructionTextTokenContents::Text),
         ];
 
         let mut tokens = vec![InstructionTextToken::new(
@@ -425,7 +431,7 @@ impl ToTokens for Instruction {
 
         match self {
             Ld(ld_type) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 match ld_type {
                     LdType::R8(dest, src) => {
                         tokens.extend(dest.to_tokens(addr));
@@ -555,7 +561,7 @@ impl ToTokens for Instruction {
                 }
             }
             Add(src) | Adc(src) | Sub(src) | Sbc(src) | And(src) | Xor(src) | Or(src) | Cp(src) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(R8::A.to_tokens(addr));
                 tokens.extend(separator.clone());
                 tokens.extend(src.to_tokens(addr));
@@ -563,22 +569,22 @@ impl ToTokens for Instruction {
 
             IncR8(r8) | DecR8(r8) | Rlc(r8) | Rrc(r8) | Rl(r8) | Rr(r8) | Sla(r8) | Sra(r8)
             | Swap(r8) | Srl(r8) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(r8.to_tokens(addr));
             }
             IncR16(r16) | DecR16(r16) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(r16.to_tokens(addr));
             }
 
             AddHL(r16) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(R16::HL.to_tokens(addr));
                 tokens.extend(separator.clone());
                 tokens.extend(r16.to_tokens(addr));
             }
             AddSP(val) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(R16::SP.to_tokens(addr));
                 tokens.extend(separator.clone());
                 let sign = if *val < 0 {
@@ -602,14 +608,14 @@ impl ToTokens for Instruction {
             }
 
             Bit(bit, r8) | Res(bit, r8) | Set(bit, r8) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(bit.to_tokens(addr));
                 tokens.extend(separator.clone());
                 tokens.extend(r8.to_tokens(addr));
             }
 
             Jr(cond, val) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 if let Some(cond) = cond {
                     tokens.extend(cond.to_tokens(addr));
                     tokens.extend(separator.clone());
@@ -623,7 +629,7 @@ impl ToTokens for Instruction {
                 ));
             }
             Jp(cond, val) | Call(cond, val) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 if let Some(cond) = cond {
                     tokens.extend(cond.to_tokens(addr));
                     tokens.extend(separator.clone());
@@ -634,23 +640,23 @@ impl ToTokens for Instruction {
                 ))
             }
             Ret(Some(cond)) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(cond.to_tokens(addr));
             }
             Rst(val) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.push(InstructionTextToken::new(
                     BnString::new(format!("{val:#04X}")),
                     InstructionTextTokenContents::PossibleAddress(*val as u64),
                 ))
             }
             JpHL => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(R16::HL.to_tokens(addr));
             }
 
             Push(reg) | Pop(reg) => {
-                tokens.push(space.clone());
+                tokens.extend(spaces.clone());
                 tokens.extend(reg.to_tokens(addr));
             }
 
