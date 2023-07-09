@@ -1,0 +1,13 @@
+[package]
+name = "binja-boy"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+binaryninja = { path = "../binaryninja-api/rust" }
+enum-primitive-derive = "^0.1"
+log = "0.4.17"
+num-traits = "^0.1"
