@@ -108,6 +108,7 @@ impl Architecture for GameBoy {
             Instruction::Rst(addr) => {
                 info.add_branch(BranchInfo::Call(addr as u64), Some(self.handle))
             }
+            Instruction::Stop => info.add_branch(BranchInfo::Exception, Some(self.handle)),
             _ => {}
         }
         Some(info)
