@@ -3,7 +3,8 @@ use crate::instruction::{Instruction, ToTokens};
 use binaryninja::{
     architecture::{
         self, Architecture, BranchInfo, CoreArchitecture, CustomArchitectureHandle, FlagCondition,
-        ImplicitRegisterExtend, InstructionInfo, RegisterInfo,
+        ImplicitRegisterExtend, InstructionInfo, RegisterInfo, UnusedIntrinsic,
+        UnusedRegisterStack, UnusedRegisterStackInfo,
     },
     disassembly::InstructionTextToken,
     llil::{LiftedExpr, Lifter},
@@ -30,12 +31,18 @@ impl GameBoy {
 
 impl Architecture for GameBoy {
     type Handle = CustomArchitectureHandle<Self>;
-    type Register = Register;
+
     type RegisterInfo = Register;
+    type Register = Register;
+    type RegisterStackInfo = UnusedRegisterStackInfo<Register>;
+    type RegisterStack = UnusedRegisterStack<Register>;
+
     type Flag = Flag;
     type FlagWrite = FlagWrite;
     type FlagClass = FlagClass;
     type FlagGroup = FlagGroup;
+
+    type Intrinsic = UnusedIntrinsic;
 
     fn endianness(&self) -> Endianness {
         Endianness::LittleEndian
@@ -233,7 +240,7 @@ impl AsRef<CoreArchitecture> for GameBoy {
     }
 }
 
-#[derive(Clone, Copy, Primitive)]
+#[derive(Clone, Copy, Primitive, Hash, PartialEq, Eq)]
 pub enum Register {
     A = 1,
     B = 2,
