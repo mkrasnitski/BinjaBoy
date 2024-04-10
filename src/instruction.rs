@@ -2,10 +2,7 @@ use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
 use std::fmt;
 
-use binaryninja::{
-    disassembly::{InstructionTextToken, InstructionTextTokenContents},
-    string::BnString,
-};
+use binaryninja::disassembly::{InstructionTextToken, InstructionTextTokenContents};
 
 pub trait ToTokens {
     fn to_tokens(&self, addr: u64) -> Vec<InstructionTextToken>;
@@ -414,21 +411,18 @@ impl ToTokens for Instruction {
         let mut spaces = Vec::with_capacity(num_spaces);
         for _ in 0..num_spaces {
             spaces.push(InstructionTextToken::new(
-                BnString::new(" "),
+                " ",
                 InstructionTextTokenContents::Text,
             ));
         }
 
         let separator = vec![
-            InstructionTextToken::new(
-                BnString::new(","),
-                InstructionTextTokenContents::OperandSeparator,
-            ),
-            InstructionTextToken::new(BnString::new(" "), InstructionTextTokenContents::Text),
+            InstructionTextToken::new(",", InstructionTextTokenContents::OperandSeparator),
+            InstructionTextToken::new(" ", InstructionTextTokenContents::Text),
         ];
 
         let mut tokens = vec![InstructionTextToken::new(
-            BnString::new(self.mnemonic()),
+            self.mnemonic(),
             InstructionTextTokenContents::Instruction,
         )];
 
@@ -445,7 +439,7 @@ impl ToTokens for Instruction {
                         tokens.extend(dest.to_tokens(addr));
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
-                            BnString::new(format!("{val:#04X}")),
+                            &format!("{val:#04X}"),
                             InstructionTextTokenContents::Integer(*val as u64),
                         ));
                     }
@@ -453,7 +447,7 @@ impl ToTokens for Instruction {
                         tokens.extend(dest.to_tokens(addr));
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
-                            BnString::new(format!("{val:#06X}")),
+                            &format!("{val:#06X}"),
                             InstructionTextTokenContents::Integer(*val as u64),
                         ));
                     }
@@ -482,15 +476,15 @@ impl ToTokens for Instruction {
                         tokens.extend(separator.clone());
                         tokens.extend(vec![
                             InstructionTextToken::new(
-                                BnString::new("("),
+                                "(",
                                 InstructionTextTokenContents::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                BnString::new(format!("{val:#06X}")),
+                                &format!("{val:#06X}"),
                                 InstructionTextTokenContents::PossibleAddress(*val as u64),
                             ),
                             InstructionTextToken::new(
-                                BnString::new(")"),
+                                ")",
                                 InstructionTextTokenContents::EndMemoryOperand,
                             ),
                         ]);
@@ -498,15 +492,15 @@ impl ToTokens for Instruction {
                     LdType::MemFromA(val) => {
                         tokens.extend(vec![
                             InstructionTextToken::new(
-                                BnString::new("("),
+                                "(",
                                 InstructionTextTokenContents::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                BnString::new(format!("{val:#06X}")),
+                                &format!("{val:#06X}"),
                                 InstructionTextTokenContents::PossibleAddress(*val as u64),
                             ),
                             InstructionTextToken::new(
-                                BnString::new(")"),
+                                ")",
                                 InstructionTextTokenContents::EndMemoryOperand,
                             ),
                         ]);
@@ -516,15 +510,15 @@ impl ToTokens for Instruction {
                     LdType::StoreSP(val) => {
                         tokens.extend(vec![
                             InstructionTextToken::new(
-                                BnString::new("("),
+                                "(",
                                 InstructionTextTokenContents::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                BnString::new(format!("{val:#06X}")),
+                                &format!("{val:#06X}"),
                                 InstructionTextTokenContents::PossibleAddress(*val as u64),
                             ),
                             InstructionTextToken::new(
-                                BnString::new(")"),
+                                ")",
                                 InstructionTextTokenContents::EndMemoryOperand,
                             ),
                         ]);
@@ -545,12 +539,9 @@ impl ToTokens for Instruction {
                         };
                         if let Some(sign) = sign {
                             tokens.extend(vec![
+                                InstructionTextToken::new(sign, InstructionTextTokenContents::Text),
                                 InstructionTextToken::new(
-                                    BnString::new(sign),
-                                    InstructionTextTokenContents::Text,
-                                ),
-                                InstructionTextToken::new(
-                                    BnString::new(val.abs().to_string()),
+                                    &val.abs().to_string(),
                                     InstructionTextTokenContents::Integer(val.abs() as u64),
                                 ),
                             ])
@@ -600,12 +591,12 @@ impl ToTokens for Instruction {
                 };
                 if let Some(sign) = sign {
                     tokens.push(InstructionTextToken::new(
-                        BnString::new(sign),
+                        sign,
                         InstructionTextTokenContents::Text,
                     ));
                 }
                 tokens.push(InstructionTextToken::new(
-                    BnString::new(val.abs().to_string()),
+                    &val.abs().to_string(),
                     InstructionTextTokenContents::Integer(val.abs() as u64),
                 ));
             }
@@ -627,7 +618,7 @@ impl ToTokens for Instruction {
                     .wrapping_add(self.length() as u16)
                     .wrapping_add_signed(*val as i16);
                 tokens.push(InstructionTextToken::new(
-                    BnString::new(format!("{addr:#06X}")),
+                    &format!("{addr:#06X}"),
                     InstructionTextTokenContents::PossibleAddress(addr as u64),
                 ));
             }
@@ -638,7 +629,7 @@ impl ToTokens for Instruction {
                     tokens.extend(separator.clone());
                 }
                 tokens.push(InstructionTextToken::new(
-                    BnString::new(format!("{val:#06X}")),
+                    &format!("{val:#06X}"),
                     InstructionTextTokenContents::PossibleAddress(*val as u64),
                 ))
             }
@@ -649,7 +640,7 @@ impl ToTokens for Instruction {
             Rst(val) => {
                 tokens.extend(spaces.clone());
                 tokens.push(InstructionTextToken::new(
-                    BnString::new(format!("{val:#06X}")),
+                    &format!("{val:#06X}"),
                     InstructionTextTokenContents::PossibleAddress(*val as u64),
                 ))
             }
@@ -732,46 +723,37 @@ impl ToTokens for R8 {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         match self {
             R8::A => vec![InstructionTextToken::new(
-                BnString::new("A"),
+                "A",
                 InstructionTextTokenContents::Register,
             )],
             R8::B => vec![InstructionTextToken::new(
-                BnString::new("B"),
+                "B",
                 InstructionTextTokenContents::Register,
             )],
             R8::C => vec![InstructionTextToken::new(
-                BnString::new("C"),
+                "C",
                 InstructionTextTokenContents::Register,
             )],
             R8::D => vec![InstructionTextToken::new(
-                BnString::new("D"),
+                "D",
                 InstructionTextTokenContents::Register,
             )],
             R8::E => vec![InstructionTextToken::new(
-                BnString::new("E"),
+                "E",
                 InstructionTextTokenContents::Register,
             )],
             R8::H => vec![InstructionTextToken::new(
-                BnString::new("H"),
+                "H",
                 InstructionTextTokenContents::Register,
             )],
             R8::L => vec![InstructionTextToken::new(
-                BnString::new("L"),
+                "L",
                 InstructionTextTokenContents::Register,
             )],
             R8::HLInd => vec![
-                InstructionTextToken::new(
-                    BnString::new("("),
-                    InstructionTextTokenContents::BeginMemoryOperand,
-                ),
-                InstructionTextToken::new(
-                    BnString::new("HL"),
-                    InstructionTextTokenContents::Register,
-                ),
-                InstructionTextToken::new(
-                    BnString::new(")"),
-                    InstructionTextTokenContents::EndMemoryOperand,
-                ),
+                InstructionTextToken::new("(", InstructionTextTokenContents::BeginMemoryOperand),
+                InstructionTextToken::new("HL", InstructionTextTokenContents::Register),
+                InstructionTextToken::new(")", InstructionTextTokenContents::EndMemoryOperand),
             ],
         }
     }
@@ -788,7 +770,7 @@ pub enum R16 {
 impl ToTokens for R16 {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            BnString::new(format!("{self:?}")),
+            &format!("{self:?}"),
             InstructionTextTokenContents::Register,
         )]
     }
@@ -821,37 +803,28 @@ impl ToTokens for Indirect {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         let mut tokens = match self {
             Indirect::BC => vec![InstructionTextToken::new(
-                BnString::new("HL"),
+                "HL",
                 InstructionTextTokenContents::Register,
             )],
             Indirect::DE => vec![InstructionTextToken::new(
-                BnString::new("DE"),
+                "DE",
                 InstructionTextTokenContents::Register,
             )],
             Indirect::HLInc => vec![
-                InstructionTextToken::new(
-                    BnString::new("HL"),
-                    InstructionTextTokenContents::Register,
-                ),
-                InstructionTextToken::new(BnString::new("+"), InstructionTextTokenContents::Text),
+                InstructionTextToken::new("HL", InstructionTextTokenContents::Register),
+                InstructionTextToken::new("+", InstructionTextTokenContents::Text),
             ],
             Indirect::HLDec => vec![
-                InstructionTextToken::new(
-                    BnString::new("HL"),
-                    InstructionTextTokenContents::Register,
-                ),
-                InstructionTextToken::new(BnString::new("-"), InstructionTextTokenContents::Text),
+                InstructionTextToken::new("HL", InstructionTextTokenContents::Register),
+                InstructionTextToken::new("-", InstructionTextTokenContents::Text),
             ],
         };
         tokens.insert(
             0,
-            InstructionTextToken::new(
-                BnString::new("("),
-                InstructionTextTokenContents::BeginMemoryOperand,
-            ),
+            InstructionTextToken::new("(", InstructionTextTokenContents::BeginMemoryOperand),
         );
         tokens.push(InstructionTextToken::new(
-            BnString::new(")"),
+            ")",
             InstructionTextTokenContents::EndMemoryOperand,
         ));
         tokens
@@ -869,30 +842,24 @@ impl ToTokens for Io {
         let mut tokens = match self {
             Io::C => vec![
                 InstructionTextToken::new(
-                    BnString::new("0xFF00"),
+                    "0xFF00",
                     InstructionTextTokenContents::PossibleAddress(0xFF00),
                 ),
-                InstructionTextToken::new(BnString::new("+"), InstructionTextTokenContents::Text),
-                InstructionTextToken::new(
-                    BnString::new("C"),
-                    InstructionTextTokenContents::Register,
-                ),
+                InstructionTextToken::new("+", InstructionTextTokenContents::Text),
+                InstructionTextToken::new("C", InstructionTextTokenContents::Register),
             ],
             Io::Imm(val) => vec![InstructionTextToken::new(
-                BnString::new(format!("{:#06X}", 0xFF00 + *val as u16)),
+                &format!("{:#06X}", 0xFF00 + *val as u16),
                 InstructionTextTokenContents::PossibleAddress(0xFF00 + *val as u64),
             )],
         };
 
         tokens.insert(
             0,
-            InstructionTextToken::new(
-                BnString::new("("),
-                InstructionTextTokenContents::BeginMemoryOperand,
-            ),
+            InstructionTextToken::new("(", InstructionTextTokenContents::BeginMemoryOperand),
         );
         tokens.push(InstructionTextToken::new(
-            BnString::new(")"),
+            ")",
             InstructionTextTokenContents::EndMemoryOperand,
         ));
         tokens
@@ -919,7 +886,7 @@ impl ToTokens for AluSrc {
         match self {
             AluSrc::R8(r8) => r8.to_tokens(addr),
             AluSrc::Imm(val) => vec![InstructionTextToken::new(
-                BnString::new(format!("{val:#04x}")),
+                &format!("{val:#04x}"),
                 InstructionTextTokenContents::Integer(*val as u64),
             )],
         }
@@ -947,7 +914,7 @@ impl fmt::Debug for BitPos {
 impl ToTokens for BitPos {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            BnString::new(format!("{self:?}")),
+            &format!("{self:?}"),
             InstructionTextTokenContents::Integer(*self as u64),
         )]
     }
@@ -964,7 +931,7 @@ pub enum BranchCond {
 impl ToTokens for BranchCond {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            BnString::new(format!("{self:?}")),
+            &format!("{self:?}"),
             InstructionTextTokenContents::Text,
         )]
     }
@@ -981,7 +948,7 @@ pub enum PushPop {
 impl ToTokens for PushPop {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            BnString::new(format!("{self:?}")),
+            &format!("{self:?}"),
             InstructionTextTokenContents::Register,
         )]
     }
