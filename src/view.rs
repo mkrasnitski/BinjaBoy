@@ -10,8 +10,8 @@ use binaryninja::{
     segment::Segment,
     symbol::{Symbol, SymbolType},
     types::{
-        DataVariable, MemberAccess, MemberScope, NamedTypeReference, NamedTypeReferenceClass,
-        Structure, StructureType, Type,
+        MemberAccess, MemberScope, NamedTypeReference, NamedTypeReferenceClass, Structure,
+        StructureType, Type,
     },
     Endianness,
 };
@@ -295,11 +295,7 @@ impl GameBoyView {
             )
         }
         for (addr, name) in IO_REGISTERS.into_iter() {
-            self.define_auto_data_var(DataVariable {
-                address: addr as u64,
-                t: Type::int(1, false).into(),
-                auto_discovered: true,
-            });
+            self.define_auto_data_var(addr as u64, &Type::int(1, false));
             self.define_auto_symbol(
                 Symbol::builder(SymbolType::Data, name, addr as u64)
                     .create()
