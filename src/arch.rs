@@ -2,18 +2,16 @@ use crate::flag::{Flag, FlagClass, FlagGroup, FlagWrite};
 use crate::instruction::{Instruction, ToTokens};
 use binaryninja::{
     architecture::{
-        self, Architecture, BranchInfo, CoreArchitecture, CustomArchitectureHandle, FlagCondition,
-        ImplicitRegisterExtend, InstructionInfo, RegisterInfo, UnusedIntrinsic,
-        UnusedRegisterStack, UnusedRegisterStackInfo,
+        self, Architecture, BranchKind, CoreArchitecture, CustomArchitectureHandle, FlagId,
+        FlagWriteId, ImplicitRegisterExtend, InstructionInfo, RegisterId, RegisterInfo,
+        UnusedIntrinsic, UnusedRegisterStack,
     },
     disassembly::InstructionTextToken,
-    llil::{LiftedExpr, Lifter},
+    low_level_il::LowLevelILMutableFunction,
     Endianness,
 };
-use enum_primitive_derive::Primitive;
-use log::error;
-use num_traits::FromPrimitive;
 use std::borrow::Cow;
+use tracing::error;
 
 pub struct GameBoy {
     handle: CoreArchitecture,
@@ -34,7 +32,7 @@ impl Architecture for GameBoy {
 
     type RegisterInfo = Register;
     type Register = Register;
-    type RegisterStackInfo = UnusedRegisterStackInfo<Register>;
+    type RegisterStackInfo = UnusedRegisterStack<Register>;
     type RegisterStack = UnusedRegisterStack<Register>;
 
     type Flag = Flag;
@@ -64,58 +62,42 @@ impl Architecture for GameBoy {
         3
     }
 
-    fn opcode_display_len(&self) -> usize {
-        self.max_instr_len()
-    }
-
-    fn associated_arch_by_addr(&self, _: &mut u64) -> CoreArchitecture {
-        self.handle
-    }
-
     fn instruction_info(&self, data: &[u8], address: u64) -> Option<InstructionInfo> {
         let instr = Instruction::decode(data)?;
-        let mut info = InstructionInfo::new(instr.length(), false);
+        let mut info = InstructionInfo::new(instr.length(), 0);
 
         let addr = address as u16;
         let next_instr = addr.wrapping_add(instr.length() as u16);
         match instr {
             Instruction::Jr(cond, offset) => {
                 if cond.is_some() {
-                    info.add_branch(
-                        BranchInfo::True(next_instr.wrapping_add_signed(offset as i16) as u64),
-                        Some(self.handle),
-                    );
-                    info.add_branch(BranchInfo::False(next_instr as u64), Some(self.handle));
+                    info.add_branch(BranchKind::True(
+                        next_instr.wrapping_add_signed(offset as i16) as u64,
+                    ));
+                    info.add_branch(BranchKind::False(next_instr as u64));
                 } else {
-                    info.add_branch(
-                        BranchInfo::Unconditional(
-                            next_instr.wrapping_add_signed(offset as i16) as u64
-                        ),
-                        Some(self.handle),
-                    )
+                    info.add_branch(BranchKind::Unconditional(
+                        next_instr.wrapping_add_signed(offset as i16) as u64,
+                    ))
                 }
             }
             Instruction::Jp(cond, addr) => {
                 if cond.is_some() {
-                    info.add_branch(BranchInfo::True(addr as u64), Some(self.handle));
-                    info.add_branch(BranchInfo::False(next_instr as u64), Some(self.handle));
+                    info.add_branch(BranchKind::True(addr as u64));
+                    info.add_branch(BranchKind::False(next_instr as u64));
                 } else {
-                    info.add_branch(BranchInfo::Unconditional(addr as u64), Some(self.handle))
+                    info.add_branch(BranchKind::Unconditional(addr as u64))
                 }
             }
-            Instruction::JpHL => info.add_branch(BranchInfo::Indirect, Some(self.handle)),
-            Instruction::Call(_, addr) => {
-                info.add_branch(BranchInfo::Call(addr as u64), Some(self.handle))
-            }
+            Instruction::JpHL => info.add_branch(BranchKind::Indirect),
+            Instruction::Call(_, addr) => info.add_branch(BranchKind::Call(addr as u64)),
             Instruction::Ret(Some(_)) => {} // conditional returns don't end the block
             Instruction::Ret(None) | Instruction::Reti => {
-                info.add_branch(BranchInfo::FunctionReturn, Some(self.handle))
+                info.add_branch(BranchKind::FunctionReturn)
             }
             // unsure if this is correct - binja's z80 support doesn't do this
-            Instruction::Rst(addr) => {
-                info.add_branch(BranchInfo::Call(addr as u64), Some(self.handle))
-            }
-            Instruction::Stop => info.add_branch(BranchInfo::Exception, Some(self.handle)),
+            Instruction::Rst(addr) => info.add_branch(BranchKind::Call(addr as u64)),
+            Instruction::Stop => info.add_branch(BranchKind::Exception),
             _ => {}
         }
         Some(info)
@@ -134,24 +116,8 @@ impl Architecture for GameBoy {
         &self,
         _data: &[u8],
         _address: u64,
-        _il: &mut Lifter<Self>,
+        _il: &LowLevelILMutableFunction,
     ) -> Option<(usize, bool)> {
-        None
-    }
-
-    fn flags_required_for_flag_condition(
-        &self,
-        _condition: FlagCondition,
-        _class: Option<Self::FlagClass>,
-    ) -> Vec<Self::Flag> {
-        vec![]
-    }
-
-    fn flag_group_llil<'a>(
-        &self,
-        _group: Self::FlagGroup,
-        _il: &'a mut Lifter<Self>,
-    ) -> Option<LiftedExpr<'a, Self>> {
         None
     }
 
@@ -165,68 +131,45 @@ impl Architecture for GameBoy {
         vec![AF, BC, DE, HL, SP, PC]
     }
 
-    fn registers_global(&self) -> Vec<Self::Register> {
-        vec![]
-    }
-
-    fn registers_system(&self) -> Vec<Self::Register> {
-        vec![]
+    fn stack_pointer_reg(&self) -> Option<Self::Register> {
+        Some(Register::SP)
     }
 
     fn flags(&self) -> Vec<Self::Flag> {
         vec![Flag::Z, Flag::N, Flag::H, Flag::C]
     }
 
+    fn flag_from_id(&self, id: FlagId) -> Option<Self::Flag> {
+        match id.0 {
+            1 => Some(Flag::Z),
+            2 => Some(Flag::N),
+            3 => Some(Flag::H),
+            4 => Some(Flag::C),
+            _ => None,
+        }
+    }
+
     fn flag_write_types(&self) -> Vec<Self::FlagWrite> {
         vec![FlagWrite::All, FlagWrite::Czn, FlagWrite::Zn]
     }
 
-    fn flag_classes(&self) -> Vec<Self::FlagClass> {
-        vec![]
-    }
-
-    fn flag_groups(&self) -> Vec<Self::FlagGroup> {
-        vec![]
-    }
-
-    fn stack_pointer_reg(&self) -> Option<Self::Register> {
-        Some(Register::SP)
-    }
-
-    fn link_reg(&self) -> Option<Self::Register> {
-        None
-    }
-
-    fn register_from_id(&self, id: u32) -> Option<Self::Register> {
-        let register = Register::from_u32(id);
-        if register.is_none() {
-            error!("invalid register id {}", id);
+    fn flag_write_from_id(&self, id: FlagWriteId) -> Option<Self::FlagWrite> {
+        match id.0 {
+            1 => Some(FlagWrite::All),
+            2 => Some(FlagWrite::Czn),
+            3 => Some(FlagWrite::Zn),
+            _ => None,
         }
-        register
     }
 
-    fn flag_from_id(&self, id: u32) -> Option<Self::Flag> {
-        let flag = Flag::from_u32(id);
-        if flag.is_none() {
-            error!("invalid flag id {}", id);
+    fn register_from_id(&self, id: RegisterId) -> Option<Self::Register> {
+        match id.try_into() {
+            Ok(flag) => Some(flag),
+            Err(()) => {
+                error!("invalid register id {id}");
+                None
+            }
         }
-        flag
-    }
-
-    fn flag_write_from_id(&self, id: u32) -> Option<Self::FlagWrite> {
-        let flag_write = FlagWrite::from_u32(id);
-        if flag_write.is_none() {
-            error!("invalid flag write id {}", id);
-        }
-        flag_write
-    }
-
-    fn flag_class_from_id(&self, _: u32) -> Option<Self::FlagClass> {
-        None
-    }
-
-    fn flag_group_from_id(&self, _: u32) -> Option<Self::FlagGroup> {
-        None
     }
 
     fn handle(&self) -> Self::Handle {
@@ -240,7 +183,7 @@ impl AsRef<CoreArchitecture> for GameBoy {
     }
 }
 
-#[derive(Clone, Copy, Primitive, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Register {
     A = 1,
     B = 2,
@@ -258,10 +201,34 @@ pub enum Register {
     Flags = 14,
 }
 
+impl TryFrom<RegisterId> for Register {
+    type Error = ();
+
+    fn try_from(value: RegisterId) -> Result<Self, Self::Error> {
+        match value.0 {
+            1 => Ok(Self::A),
+            2 => Ok(Self::B),
+            3 => Ok(Self::C),
+            4 => Ok(Self::D),
+            5 => Ok(Self::E),
+            6 => Ok(Self::H),
+            7 => Ok(Self::L),
+            8 => Ok(Self::AF),
+            9 => Ok(Self::BC),
+            10 => Ok(Self::DE),
+            11 => Ok(Self::HL),
+            12 => Ok(Self::SP),
+            13 => Ok(Self::PC),
+            14 => Ok(Self::Flags),
+            _ => Err(()),
+        }
+    }
+}
+
 impl architecture::Register for Register {
     type InfoType = Self;
 
-    fn name(&self) -> Cow<str> {
+    fn name(&self) -> Cow<'_, str> {
         match self {
             Self::A => "A",
             Self::B => "B",
@@ -285,8 +252,8 @@ impl architecture::Register for Register {
         *self
     }
 
-    fn id(&self) -> u32 {
-        *self as u32
+    fn id(&self) -> RegisterId {
+        RegisterId(*self as u32)
     }
 }
 

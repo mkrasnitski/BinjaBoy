@@ -1,9 +1,8 @@
-use binaryninja::architecture::{self, FlagCondition, FlagRole};
-use enum_primitive_derive::Primitive;
+use binaryninja::architecture::{self, FlagClassId, FlagGroupId, FlagId, FlagRole, FlagWriteId};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-#[derive(Clone, Copy, Hash, Eq, PartialEq, Primitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Flag {
     Z = 1,
     N = 2,
@@ -14,7 +13,7 @@ pub enum Flag {
 impl architecture::Flag for Flag {
     type FlagClass = FlagClass;
 
-    fn name(&self) -> Cow<str> {
+    fn name(&self) -> Cow<'_, str> {
         match self {
             Self::Z => "Z",
             Self::N => "N",
@@ -33,12 +32,12 @@ impl architecture::Flag for Flag {
         }
     }
 
-    fn id(&self) -> u32 {
-        *self as u32
+    fn id(&self) -> FlagId {
+        FlagId(*self as u32)
     }
 }
 
-#[derive(Clone, Copy, Primitive)]
+#[derive(Clone, Copy)]
 pub enum FlagWrite {
     All = 1,
     Czn = 2,
@@ -49,7 +48,7 @@ impl architecture::FlagWrite for FlagWrite {
     type FlagType = Flag;
     type FlagClass = FlagClass;
 
-    fn name(&self) -> Cow<str> {
+    fn name(&self) -> Cow<'_, str> {
         match self {
             Self::All => "*",
             Self::Czn => "czn",
@@ -62,8 +61,8 @@ impl architecture::FlagWrite for FlagWrite {
         None
     }
 
-    fn id(&self) -> u32 {
-        *self as u32
+    fn id(&self) -> FlagWriteId {
+        FlagWriteId(*self as u32)
     }
 
     fn flags_written(&self) -> Vec<Self::FlagType> {
@@ -75,31 +74,31 @@ impl architecture::FlagWrite for FlagWrite {
     }
 }
 
-#[derive(Clone, Copy, Hash, Eq, PartialEq)]
-pub struct FlagClass;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FlagClass {}
 
 impl architecture::FlagClass for FlagClass {
-    fn id(&self) -> u32 {
+    fn name(&self) -> Cow<'_, str> {
         unimplemented!()
     }
 
-    fn name(&self) -> Cow<str> {
+    fn id(&self) -> FlagClassId {
         unimplemented!()
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct FlagGroup;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FlagGroup {}
 
 impl architecture::FlagGroup for FlagGroup {
     type FlagType = Flag;
     type FlagClass = FlagClass;
 
-    fn name(&self) -> Cow<str> {
+    fn name(&self) -> Cow<'_, str> {
         unimplemented!()
     }
 
-    fn id(&self) -> u32 {
+    fn id(&self) -> FlagGroupId {
         unimplemented!()
     }
 
@@ -107,7 +106,7 @@ impl architecture::FlagGroup for FlagGroup {
         unimplemented!()
     }
 
-    fn flag_conditions(&self) -> HashMap<Self::FlagClass, FlagCondition> {
+    fn flag_conditions(&self) -> HashMap<Self::FlagClass, architecture::FlagCondition> {
         unimplemented!()
     }
 }

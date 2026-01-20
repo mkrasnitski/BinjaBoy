@@ -9,5 +9,5 @@ crate-type = ["cdylib"]
 [dependencies]
 binaryninja = { path = "../binaryninja-api/rust" }
 enum-primitive-derive = "^0.1"
-log = "0.4.17"
+tracing = "0.1"
 num-traits = "^0.1"

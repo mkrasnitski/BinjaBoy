@@ -1,13 +1,13 @@
 use binaryninja::{
     architecture::{Architecture, ArchitectureExt, CoreArchitecture},
-    binaryview::{BinaryView, BinaryViewBase, BinaryViewExt, Result as BinaryViewResult},
-    custombinaryview::{
+    binary_view::{BinaryView, BinaryViewBase, BinaryViewExt, Result as BinaryViewResult},
+    custom_binary_view::{
         BinaryViewType, BinaryViewTypeBase, CustomBinaryView, CustomBinaryViewType, CustomView,
         CustomViewBuilder,
     },
     rc::Ref,
     section::{Section, Semantics},
-    segment::Segment,
+    segment::{Segment, SegmentFlags},
     symbol::{Symbol, SymbolType},
     types::{
         MemberAccess, MemberScope, NamedTypeReference, NamedTypeReferenceClass, Structure,
@@ -15,7 +15,7 @@ use binaryninja::{
     },
     Endianness,
 };
-use log::debug;
+use tracing::debug;
 
 const NINTENDO_LOGO: &[u8; 0x30] = b"\xCE\xED\x66\x66\xCC\x0D\x00\x0B\x03\x73\x00\x83\x00\x0C\x00\x0D\x00\x08\x11\x1F\x88\x89\x00\x0E\xDC\xCC\x6E\xE6\xDD\xDD\xD9\x99\xBB\xBB\x67\x63\x6E\x0E\xEC\xCC\xDD\xDC\x99\x9F\xBB\xB9\x33\x3E";
 const HEADER_OFFSET: u64 = 0x100;
@@ -175,39 +175,45 @@ impl GameBoyView {
             Segment::builder(0..0x8000)
                 .parent_backing(0..0x8000)
                 .is_auto(true)
-                .readable(true)
-                .executable(true),
+                .flags(SegmentFlags {
+                    readable: true,
+                    executable: true,
+                    ..Default::default()
+                }),
         );
         self.add_segment(
             Segment::builder(0x8000..0x10000)
                 .is_auto(true)
-                .readable(true)
-                .writable(true)
-                .executable(true),
+                .flags(SegmentFlags {
+                    readable: true,
+                    writable: true,
+                    executable: true,
+                    ..Default::default()
+                }),
         );
 
         self.add_section(
-            Section::builder("ISR", 0..0x100)
+            Section::builder("ISR".to_string(), 0..0x100)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyCode),
         );
         self.add_section(
-            Section::builder("EntryPoint", 0x100..0x104)
+            Section::builder("EntryPoint".to_string(), 0x100..0x104)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyCode),
         );
         self.add_section(
-            Section::builder("HDR", 0x104..0x150)
+            Section::builder("HDR".to_string(), 0x104..0x150)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyData),
         );
         self.add_section(
-            Section::builder("ROM", 0x150..0x8000)
+            Section::builder("ROM".to_string(), 0x150..0x8000)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyCode),
         );
         self.add_section(
-            Section::builder("RAM", 0x8000..0x10000)
+            Section::builder("RAM".to_string(), 0x8000..0x10000)
                 .is_auto(true)
                 .semantics(Semantics::ReadWriteData),
         );
@@ -217,11 +223,24 @@ impl GameBoyView {
         let new_title = Type::array(&Type::char(), 0x10);
         let old_title = Type::structure(
             Structure::builder()
-                .with_members(vec![
-                    (&Type::array(&Type::char(), 0xb), "title"),
-                    (&Type::array(&Type::char(), 0x4), "manufacturer"),
-                    (&Type::int(1, false), "cgb_flag"),
-                ])
+                .append(
+                    &Type::array(&Type::char(), 0xb),
+                    "title",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::array(&Type::char(), 0x4),
+                    "manufacturer",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "cgb_flag",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
                 .finalize()
                 .as_ref(),
         );
@@ -243,26 +262,84 @@ impl GameBoyView {
                     MemberAccess::NoAccess,
                     MemberScope::NoScope,
                 )
-                .set_structure_type(StructureType::UnionStructureType)
+                .structure_type(StructureType::UnionStructureType)
                 .finalize()
                 .as_ref(),
         );
         let header_type = Type::structure(
             Structure::builder()
-                .with_members(vec![
-                    (&Type::array(&Type::char(), 0x30), "logo"),
-                    (&title, "title"),
-                    (&Type::array(&Type::char(), 0x2), "new_licensee"),
-                    (&Type::int(1, false), "sgb_flag"),
-                    (&Type::int(1, false), "cartridge_type"),
-                    (&Type::int(1, false), "rom_size"),
-                    (&Type::int(1, false), "ram_size"),
-                    (&Type::int(1, false), "destination"),
-                    (&Type::int(1, false), "old_licensee"),
-                    (&Type::int(1, false), "version"),
-                    (&Type::int(1, false), "checksum"),
-                    (&Type::int(2, false), "global_checksum"),
-                ])
+                .append(
+                    &Type::array(&Type::char(), 0x30),
+                    "logo",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &title,
+                    "title",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::array(&Type::char(), 0x2),
+                    "new_licensee",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "sgb_flag",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "cartridge_type",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "rom_size",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "ram_size",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "destination",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "old_licensee",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "version",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(1, false),
+                    "checksum",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
+                .append(
+                    &Type::int(2, false),
+                    "global_checksum",
+                    MemberAccess::NoAccess,
+                    MemberScope::NoScope,
+                )
                 .finalize()
                 .as_ref(),
         );
@@ -311,7 +388,7 @@ impl GameBoyView {
         self.set_default_platform(&platform);
         self.add_segments_sections();
         self.apply_header_type()?;
-        self.add_entry_point(&platform, self.entry_point());
+        self.add_entry_point(self.entry_point());
         self.define_symbols();
         Ok(())
     }
@@ -344,7 +421,7 @@ unsafe impl CustomBinaryView for GameBoyView {
         Ok(Self::new(handle))
     }
 
-    fn init(&self, _args: Self::Args) -> BinaryViewResult<()> {
-        self.init()
+    fn init(&mut self, _args: Self::Args) -> BinaryViewResult<()> {
+        GameBoyView::init(self)
     }
 }

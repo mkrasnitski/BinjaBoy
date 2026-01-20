@@ -1,8 +1,6 @@
-use enum_primitive_derive::Primitive;
-use num_traits::FromPrimitive;
 use std::fmt;
 
-use binaryninja::disassembly::{InstructionTextToken, InstructionTextTokenContents};
+use binaryninja::disassembly::{InstructionTextToken, InstructionTextTokenKind};
 
 pub trait ToTokens {
     fn to_tokens(&self, addr: u64) -> Vec<InstructionTextToken>;
@@ -79,12 +77,12 @@ impl Instruction {
         let lo_3bit = byte & 0b111;
         let hi_3bit = (byte & 0b111111) >> 3;
         let hi_2bit = hi_3bit >> 1;
-        let r8_lo = R8::from_u8(lo_3bit)?;
-        let r8_hi = R8::from_u8(hi_3bit)?;
-        let r16 = R16::from_u8(hi_2bit)?;
-        let ind = Indirect::from_u8(hi_2bit)?;
-        let branch = BranchCond::from_u8(hi_3bit & 0b11)?;
-        let push_pop = PushPop::from_u8(hi_2bit)?;
+        let r8_lo = R8::from_u8(lo_3bit);
+        let r8_hi = R8::from_u8(hi_3bit);
+        let r16 = R16::from_u8(hi_2bit);
+        let ind = Indirect::from_u8(hi_2bit);
+        let branch = BranchCond::from_u8(hi_3bit & 0b11);
+        let push_pop = PushPop::from_u8(hi_2bit);
         Some(match byte {
             0x00 => Instruction::Nop,
             0x01 | 0x11 | 0x21 | 0x31 => Instruction::Ld(LdType::R16Imm(r16, u16_arg(data)?)),
@@ -113,8 +111,8 @@ impl Instruction {
             0xc7 | 0xd7 | 0xe7 | 0xf7 | 0xcf | 0xdf | 0xef | 0xff => Instruction::Rst(hi_3bit << 3),
             0xcb => {
                 let second_byte = u8_arg(data)?;
-                let bit = BitPos::from_u8((second_byte & 0b111111) >> 3).unwrap();
-                let r8 = R8::from_u8(second_byte & 0b111).unwrap();
+                let bit = BitPos::from_u8((second_byte & 0b111111) >> 3);
+                let r8 = R8::from_u8(second_byte & 0b111);
                 match second_byte {
                     0x00..=0x07 => Instruction::Rlc(r8),
                     0x08..=0x0f => Instruction::Rrc(r8),
@@ -412,18 +410,18 @@ impl ToTokens for Instruction {
         for _ in 0..num_spaces {
             spaces.push(InstructionTextToken::new(
                 " ",
-                InstructionTextTokenContents::Text,
+                InstructionTextTokenKind::Text,
             ));
         }
 
         let separator = vec![
-            InstructionTextToken::new(",", InstructionTextTokenContents::OperandSeparator),
-            InstructionTextToken::new(" ", InstructionTextTokenContents::Text),
+            InstructionTextToken::new(",", InstructionTextTokenKind::OperandSeparator),
+            InstructionTextToken::new(" ", InstructionTextTokenKind::Text),
         ];
 
         let mut tokens = vec![InstructionTextToken::new(
             self.mnemonic(),
-            InstructionTextTokenContents::Instruction,
+            InstructionTextTokenKind::Instruction,
         )];
 
         match self {
@@ -440,7 +438,10 @@ impl ToTokens for Instruction {
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
                             &format!("{val:#04X}"),
-                            InstructionTextTokenContents::Integer(*val as u64),
+                            InstructionTextTokenKind::Integer {
+                                value: *val as u64,
+                                size: None,
+                            },
                         ));
                     }
                     LdType::R16Imm(dest, val) => {
@@ -448,7 +449,10 @@ impl ToTokens for Instruction {
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
                             &format!("{val:#06X}"),
-                            InstructionTextTokenContents::Integer(*val as u64),
+                            InstructionTextTokenKind::Integer {
+                                value: *val as u64,
+                                size: None,
+                            },
                         ));
                     }
                     LdType::AFromInd(ind) => {
@@ -477,15 +481,18 @@ impl ToTokens for Instruction {
                         tokens.extend(vec![
                             InstructionTextToken::new(
                                 "(",
-                                InstructionTextTokenContents::BeginMemoryOperand,
+                                InstructionTextTokenKind::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
                                 &format!("{val:#06X}"),
-                                InstructionTextTokenContents::PossibleAddress(*val as u64),
+                                InstructionTextTokenKind::PossibleAddress {
+                                    value: *val as u64,
+                                    size: None,
+                                },
                             ),
                             InstructionTextToken::new(
                                 ")",
-                                InstructionTextTokenContents::EndMemoryOperand,
+                                InstructionTextTokenKind::EndMemoryOperand,
                             ),
                         ]);
                     }
@@ -493,15 +500,18 @@ impl ToTokens for Instruction {
                         tokens.extend(vec![
                             InstructionTextToken::new(
                                 "(",
-                                InstructionTextTokenContents::BeginMemoryOperand,
+                                InstructionTextTokenKind::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
                                 &format!("{val:#06X}"),
-                                InstructionTextTokenContents::PossibleAddress(*val as u64),
+                                InstructionTextTokenKind::PossibleAddress {
+                                    value: *val as u64,
+                                    size: None,
+                                },
                             ),
                             InstructionTextToken::new(
                                 ")",
-                                InstructionTextTokenContents::EndMemoryOperand,
+                                InstructionTextTokenKind::EndMemoryOperand,
                             ),
                         ]);
                         tokens.extend(separator.clone());
@@ -511,15 +521,18 @@ impl ToTokens for Instruction {
                         tokens.extend(vec![
                             InstructionTextToken::new(
                                 "(",
-                                InstructionTextTokenContents::BeginMemoryOperand,
+                                InstructionTextTokenKind::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
                                 &format!("{val:#06X}"),
-                                InstructionTextTokenContents::PossibleAddress(*val as u64),
+                                InstructionTextTokenKind::PossibleAddress {
+                                    value: *val as u64,
+                                    size: None,
+                                },
                             ),
                             InstructionTextToken::new(
                                 ")",
-                                InstructionTextTokenContents::EndMemoryOperand,
+                                InstructionTextTokenKind::EndMemoryOperand,
                             ),
                         ]);
                         tokens.extend(separator.clone());
@@ -539,10 +552,13 @@ impl ToTokens for Instruction {
                         };
                         if let Some(sign) = sign {
                             tokens.extend(vec![
-                                InstructionTextToken::new(sign, InstructionTextTokenContents::Text),
+                                InstructionTextToken::new(sign, InstructionTextTokenKind::Text),
                                 InstructionTextToken::new(
                                     &val.abs().to_string(),
-                                    InstructionTextTokenContents::Integer(val.abs() as u64),
+                                    InstructionTextTokenKind::Integer {
+                                        value: val.abs() as u64,
+                                        size: None,
+                                    },
                                 ),
                             ])
                         }
@@ -592,12 +608,15 @@ impl ToTokens for Instruction {
                 if let Some(sign) = sign {
                     tokens.push(InstructionTextToken::new(
                         sign,
-                        InstructionTextTokenContents::Text,
+                        InstructionTextTokenKind::Text,
                     ));
                 }
                 tokens.push(InstructionTextToken::new(
                     &val.abs().to_string(),
-                    InstructionTextTokenContents::Integer(val.abs() as u64),
+                    InstructionTextTokenKind::Integer {
+                        value: val.abs() as u64,
+                        size: None,
+                    },
                 ));
             }
 
@@ -619,7 +638,10 @@ impl ToTokens for Instruction {
                     .wrapping_add_signed(*val as i16);
                 tokens.push(InstructionTextToken::new(
                     &format!("{addr:#06X}"),
-                    InstructionTextTokenContents::PossibleAddress(addr as u64),
+                    InstructionTextTokenKind::PossibleAddress {
+                        value: addr as u64,
+                        size: None,
+                    },
                 ));
             }
             Jp(cond, val) | Call(cond, val) => {
@@ -630,7 +652,10 @@ impl ToTokens for Instruction {
                 }
                 tokens.push(InstructionTextToken::new(
                     &format!("{val:#06X}"),
-                    InstructionTextTokenContents::PossibleAddress(*val as u64),
+                    InstructionTextTokenKind::PossibleAddress {
+                        value: *val as u64,
+                        size: None,
+                    },
                 ))
             }
             Ret(Some(cond)) => {
@@ -641,7 +666,10 @@ impl ToTokens for Instruction {
                 tokens.extend(spaces.clone());
                 tokens.push(InstructionTextToken::new(
                     &format!("{val:#06X}"),
-                    InstructionTextTokenContents::PossibleAddress(*val as u64),
+                    InstructionTextTokenKind::PossibleAddress {
+                        value: *val as u64,
+                        size: None,
+                    },
                 ))
             }
             JpHL => {
@@ -688,7 +716,7 @@ pub enum LdType {
     SPFromHL,
 }
 
-#[derive(Copy, Clone, Primitive)]
+#[derive(Copy, Clone)]
 pub enum R8 {
     A = 7,
     B = 0,
@@ -698,6 +726,22 @@ pub enum R8 {
     H = 4,
     L = 5,
     HLInd = 6,
+}
+
+impl R8 {
+    fn from_u8(val: u8) -> Self {
+        match val {
+            7 => R8::A,
+            0 => R8::B,
+            1 => R8::C,
+            2 => R8::D,
+            3 => R8::E,
+            4 => R8::H,
+            5 => R8::L,
+            6 => R8::HLInd,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl fmt::Debug for R8 {
@@ -724,42 +768,42 @@ impl ToTokens for R8 {
         match self {
             R8::A => vec![InstructionTextToken::new(
                 "A",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             R8::B => vec![InstructionTextToken::new(
                 "B",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             R8::C => vec![InstructionTextToken::new(
                 "C",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             R8::D => vec![InstructionTextToken::new(
                 "D",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             R8::E => vec![InstructionTextToken::new(
                 "E",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             R8::H => vec![InstructionTextToken::new(
                 "H",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             R8::L => vec![InstructionTextToken::new(
                 "L",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             R8::HLInd => vec![
-                InstructionTextToken::new("(", InstructionTextTokenContents::BeginMemoryOperand),
-                InstructionTextToken::new("HL", InstructionTextTokenContents::Register),
-                InstructionTextToken::new(")", InstructionTextTokenContents::EndMemoryOperand),
+                InstructionTextToken::new("(", InstructionTextTokenKind::BeginMemoryOperand),
+                InstructionTextToken::new("HL", InstructionTextTokenKind::Register),
+                InstructionTextToken::new(")", InstructionTextTokenKind::EndMemoryOperand),
             ],
         }
     }
 }
 
-#[derive(Copy, Clone, Debug, Primitive)]
+#[derive(Copy, Clone, Debug)]
 pub enum R16 {
     BC = 0,
     DE = 1,
@@ -767,21 +811,45 @@ pub enum R16 {
     SP = 3,
 }
 
+impl R16 {
+    fn from_u8(val: u8) -> Self {
+        match val {
+            0 => R16::BC,
+            1 => R16::DE,
+            2 => R16::HL,
+            3 => R16::SP,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl ToTokens for R16 {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
             &format!("{self:?}"),
-            InstructionTextTokenContents::Register,
+            InstructionTextTokenKind::Register,
         )]
     }
 }
 
-#[derive(Copy, Clone, Primitive)]
+#[derive(Copy, Clone)]
 pub enum Indirect {
     BC = 0,
     DE = 1,
     HLInc = 2,
     HLDec = 3,
+}
+
+impl Indirect {
+    fn from_u8(val: u8) -> Self {
+        match val {
+            0 => Self::BC,
+            1 => Self::DE,
+            2 => Self::HLInc,
+            3 => Self::HLDec,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl fmt::Debug for Indirect {
@@ -804,28 +872,28 @@ impl ToTokens for Indirect {
         let mut tokens = match self {
             Indirect::BC => vec![InstructionTextToken::new(
                 "HL",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             Indirect::DE => vec![InstructionTextToken::new(
                 "DE",
-                InstructionTextTokenContents::Register,
+                InstructionTextTokenKind::Register,
             )],
             Indirect::HLInc => vec![
-                InstructionTextToken::new("HL", InstructionTextTokenContents::Register),
-                InstructionTextToken::new("+", InstructionTextTokenContents::Text),
+                InstructionTextToken::new("HL", InstructionTextTokenKind::Register),
+                InstructionTextToken::new("+", InstructionTextTokenKind::Text),
             ],
             Indirect::HLDec => vec![
-                InstructionTextToken::new("HL", InstructionTextTokenContents::Register),
-                InstructionTextToken::new("-", InstructionTextTokenContents::Text),
+                InstructionTextToken::new("HL", InstructionTextTokenKind::Register),
+                InstructionTextToken::new("-", InstructionTextTokenKind::Text),
             ],
         };
         tokens.insert(
             0,
-            InstructionTextToken::new("(", InstructionTextTokenContents::BeginMemoryOperand),
+            InstructionTextToken::new("(", InstructionTextTokenKind::BeginMemoryOperand),
         );
         tokens.push(InstructionTextToken::new(
             ")",
-            InstructionTextTokenContents::EndMemoryOperand,
+            InstructionTextTokenKind::EndMemoryOperand,
         ));
         tokens
     }
@@ -843,24 +911,30 @@ impl ToTokens for Io {
             Io::C => vec![
                 InstructionTextToken::new(
                     "0xFF00",
-                    InstructionTextTokenContents::PossibleAddress(0xFF00),
+                    InstructionTextTokenKind::PossibleAddress {
+                        value: 0xFF00,
+                        size: None,
+                    },
                 ),
-                InstructionTextToken::new("+", InstructionTextTokenContents::Text),
-                InstructionTextToken::new("C", InstructionTextTokenContents::Register),
+                InstructionTextToken::new("+", InstructionTextTokenKind::Text),
+                InstructionTextToken::new("C", InstructionTextTokenKind::Register),
             ],
             Io::Imm(val) => vec![InstructionTextToken::new(
                 &format!("{:#06X}", 0xFF00 + *val as u16),
-                InstructionTextTokenContents::PossibleAddress(0xFF00 + *val as u64),
+                InstructionTextTokenKind::PossibleAddress {
+                    value: 0xFF00 + *val as u64,
+                    size: None,
+                },
             )],
         };
 
         tokens.insert(
             0,
-            InstructionTextToken::new("(", InstructionTextTokenContents::BeginMemoryOperand),
+            InstructionTextToken::new("(", InstructionTextTokenKind::BeginMemoryOperand),
         );
         tokens.push(InstructionTextToken::new(
             ")",
-            InstructionTextTokenContents::EndMemoryOperand,
+            InstructionTextTokenKind::EndMemoryOperand,
         ));
         tokens
     }
@@ -887,13 +961,16 @@ impl ToTokens for AluSrc {
             AluSrc::R8(r8) => r8.to_tokens(addr),
             AluSrc::Imm(val) => vec![InstructionTextToken::new(
                 &format!("{val:#04x}"),
-                InstructionTextTokenContents::Integer(*val as u64),
+                InstructionTextTokenKind::Integer {
+                    value: *val as u64,
+                    size: None,
+                },
             )],
         }
     }
 }
 
-#[derive(Copy, Clone, Primitive)]
+#[derive(Copy, Clone)]
 pub enum BitPos {
     Zero = 0,
     One = 1,
@@ -903,6 +980,22 @@ pub enum BitPos {
     Five = 5,
     Six = 6,
     Seven = 7,
+}
+
+impl BitPos {
+    fn from_u8(val: u8) -> Self {
+        match val {
+            0 => Self::Zero,
+            1 => Self::One,
+            2 => Self::Two,
+            3 => Self::Three,
+            4 => Self::Four,
+            5 => Self::Five,
+            6 => Self::Six,
+            7 => Self::Seven,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl fmt::Debug for BitPos {
@@ -915,12 +1008,15 @@ impl ToTokens for BitPos {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
             &format!("{self:?}"),
-            InstructionTextTokenContents::Integer(*self as u64),
+            InstructionTextTokenKind::Integer {
+                value: *self as u64,
+                size: None,
+            },
         )]
     }
 }
 
-#[derive(Copy, Clone, Debug, Primitive)]
+#[derive(Copy, Clone, Debug)]
 pub enum BranchCond {
     NZ = 0,
     Z = 1,
@@ -928,16 +1024,28 @@ pub enum BranchCond {
     C = 3,
 }
 
+impl BranchCond {
+    fn from_u8(val: u8) -> Self {
+        match val {
+            0 => Self::NZ,
+            1 => Self::Z,
+            2 => Self::NC,
+            3 => Self::C,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl ToTokens for BranchCond {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
             &format!("{self:?}"),
-            InstructionTextTokenContents::Text,
+            InstructionTextTokenKind::Text,
         )]
     }
 }
 
-#[derive(Copy, Clone, Debug, Primitive)]
+#[derive(Copy, Clone, Debug)]
 pub enum PushPop {
     BC = 0,
     DE = 1,
@@ -945,11 +1053,23 @@ pub enum PushPop {
     AF = 3,
 }
 
+impl PushPop {
+    fn from_u8(val: u8) -> Self {
+        match val {
+            0 => Self::BC,
+            1 => Self::DE,
+            2 => Self::HL,
+            3 => Self::AF,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl ToTokens for PushPop {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
             &format!("{self:?}"),
-            InstructionTextTokenContents::Register,
+            InstructionTextTokenKind::Register,
         )]
     }
 }
