@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt;
 
 use binaryninja::disassembly::{InstructionTextToken, InstructionTextTokenKind};
@@ -73,7 +74,7 @@ pub enum Instruction {
 
 impl Instruction {
     pub fn decode(data: &[u8]) -> Option<Self> {
-        let byte = data.get(0)?;
+        let byte = data.first()?;
         let lo_3bit = byte & 0b111;
         let hi_3bit = (byte & 0b111111) >> 3;
         let hi_2bit = hi_3bit >> 1;
@@ -97,7 +98,7 @@ impl Instruction {
             0x09 | 0x19 | 0x29 | 0x39 => Instruction::AddHL(r16),
             0x0a | 0x1a | 0x2a | 0x3a => Instruction::Ld(LdType::AFromInd(ind)),
             0x0b | 0x1b | 0x2b | 0x3b => Instruction::DecR16(r16),
-            0x20 | 0x28 | 0x30 | 0x38 => Instruction::Jr(Some(branch), u8_arg(data)? as i8),
+            0x20 | 0x28 | 0x30 | 0x38 => Instruction::Jr(Some(branch), u8_arg(data)?.cast_signed()),
             0x40..=0x75 | 0x77..=0x7f => Instruction::Ld(LdType::R8(r8_hi, r8_lo)),
             0x80..=0xbf => Self::decode_alu(*byte, AluSrc::R8(r8_lo)),
             0xc0 | 0xd0 | 0xc8 | 0xd8 => Instruction::Ret(Some(branch)),
@@ -138,7 +139,7 @@ impl Instruction {
             0x0f => Instruction::Rrca,
             0x10 => Instruction::Stop,
             0x17 => Instruction::Rla,
-            0x18 => Instruction::Jr(None, u8_arg(data)? as i8),
+            0x18 => Instruction::Jr(None, u8_arg(data)?.cast_signed()),
             0x1f => Instruction::Rra,
             0x27 => Instruction::Daa,
             0x2f => Instruction::Cpl,
@@ -149,11 +150,11 @@ impl Instruction {
             0xc9 => Instruction::Ret(None),
             0xcd => Instruction::Call(None, u16_arg(data)?),
             0xd9 => Instruction::Reti,
-            0xe8 => Instruction::AddSP(u8_arg(data)? as i8),
+            0xe8 => Instruction::AddSP(u8_arg(data)?.cast_signed()),
             0xe9 => Instruction::JpHL,
             0xf3 => Instruction::Di,
             0xfb => Instruction::Ei,
-            0xf8 => Instruction::Ld(LdType::HLFromSP(u8_arg(data)? as i8)),
+            0xf8 => Instruction::Ld(LdType::HLFromSP(u8_arg(data)?.cast_signed())),
             0xf9 => Instruction::Ld(LdType::SPFromHL),
 
             0xd3 | 0xdb | 0xdd | 0xe3 | 0xe4 | 0xeb | 0xec | 0xed | 0xf4 | 0xfc | 0xfd => {
@@ -244,7 +245,7 @@ impl Instruction {
         }
     }
 
-    pub fn mnemonic(&self) -> &'static str {
+    pub fn mnemonic(self) -> &'static str {
         use Instruction::*;
         match self {
             Nop => "NOP",
@@ -437,10 +438,11 @@ impl ToTokens for Instruction {
                         tokens.extend(dest.to_tokens(addr));
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
-                            &format!("{val:#04X}"),
+                            format!("{val:#04X}"),
                             InstructionTextTokenKind::Integer {
                                 value: *val as u64,
                                 size: None,
+                                operand: None,
                             },
                         ));
                     }
@@ -448,10 +450,11 @@ impl ToTokens for Instruction {
                         tokens.extend(dest.to_tokens(addr));
                         tokens.extend(separator.clone());
                         tokens.push(InstructionTextToken::new(
-                            &format!("{val:#06X}"),
+                            format!("{val:#06X}"),
                             InstructionTextTokenKind::Integer {
                                 value: *val as u64,
                                 size: None,
+                                operand: None,
                             },
                         ));
                     }
@@ -484,10 +487,11 @@ impl ToTokens for Instruction {
                                 InstructionTextTokenKind::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                &format!("{val:#06X}"),
+                                format!("{val:#06X}"),
                                 InstructionTextTokenKind::PossibleAddress {
                                     value: *val as u64,
                                     size: None,
+                                    operand: None,
                                 },
                             ),
                             InstructionTextToken::new(
@@ -503,10 +507,11 @@ impl ToTokens for Instruction {
                                 InstructionTextTokenKind::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                &format!("{val:#06X}"),
+                                format!("{val:#06X}"),
                                 InstructionTextTokenKind::PossibleAddress {
                                     value: *val as u64,
                                     size: None,
+                                    operand: None,
                                 },
                             ),
                             InstructionTextToken::new(
@@ -524,10 +529,11 @@ impl ToTokens for Instruction {
                                 InstructionTextTokenKind::BeginMemoryOperand,
                             ),
                             InstructionTextToken::new(
-                                &format!("{val:#06X}"),
+                                format!("{val:#06X}"),
                                 InstructionTextTokenKind::PossibleAddress {
                                     value: *val as u64,
                                     size: None,
+                                    operand: None,
                                 },
                             ),
                             InstructionTextToken::new(
@@ -542,25 +548,24 @@ impl ToTokens for Instruction {
                         tokens.extend(R16::HL.to_tokens(addr));
                         tokens.extend(separator.clone());
                         tokens.extend(R16::SP.to_tokens(addr));
-                        let sign = if *val < 0 {
-                            Some("-")
-                        } else if *val > 0 {
-                            Some("+")
-                        } else {
-                            // val == 0
-                            None
+                        let sign = match val.cmp(&0) {
+                            Ordering::Less => Some("-"),
+                            Ordering::Greater => Some("+"),
+                            Ordering::Equal => None,
                         };
                         if let Some(sign) = sign {
+                            let abs = val.unsigned_abs();
                             tokens.extend(vec![
                                 InstructionTextToken::new(sign, InstructionTextTokenKind::Text),
                                 InstructionTextToken::new(
-                                    &val.abs().to_string(),
+                                    abs.to_string(),
                                     InstructionTextTokenKind::Integer {
-                                        value: val.abs() as u64,
+                                        value: abs as u64,
                                         size: None,
+                                        operand: None,
                                     },
                                 ),
-                            ])
+                            ]);
                         }
                     }
                     LdType::SPFromHL => {
@@ -597,13 +602,10 @@ impl ToTokens for Instruction {
                 tokens.extend(spaces.clone());
                 tokens.extend(R16::SP.to_tokens(addr));
                 tokens.extend(separator.clone());
-                let sign = if *val < 0 {
-                    Some("-")
-                } else if *val > 0 {
-                    Some("+")
-                } else {
-                    // val == 0
-                    None
+                let sign = match val.cmp(&0) {
+                    Ordering::Less => Some("-"),
+                    Ordering::Greater => Some("+"),
+                    Ordering::Equal => None,
                 };
                 if let Some(sign) = sign {
                     tokens.push(InstructionTextToken::new(
@@ -611,11 +613,13 @@ impl ToTokens for Instruction {
                         InstructionTextTokenKind::Text,
                     ));
                 }
+                let abs = val.unsigned_abs();
                 tokens.push(InstructionTextToken::new(
-                    &val.abs().to_string(),
+                    abs.to_string(),
                     InstructionTextTokenKind::Integer {
-                        value: val.abs() as u64,
+                        value: abs as u64,
                         size: None,
+                        operand: None,
                     },
                 ));
             }
@@ -637,10 +641,11 @@ impl ToTokens for Instruction {
                     .wrapping_add(self.length() as u16)
                     .wrapping_add_signed(*val as i16);
                 tokens.push(InstructionTextToken::new(
-                    &format!("{addr:#06X}"),
+                    format!("{addr:#06X}"),
                     InstructionTextTokenKind::PossibleAddress {
                         value: addr as u64,
                         size: None,
+                        operand: None,
                     },
                 ));
             }
@@ -651,12 +656,13 @@ impl ToTokens for Instruction {
                     tokens.extend(separator.clone());
                 }
                 tokens.push(InstructionTextToken::new(
-                    &format!("{val:#06X}"),
+                    format!("{val:#06X}"),
                     InstructionTextTokenKind::PossibleAddress {
                         value: *val as u64,
                         size: None,
+                        operand: None,
                     },
-                ))
+                ));
             }
             Ret(Some(cond)) => {
                 tokens.extend(spaces.clone());
@@ -665,12 +671,13 @@ impl ToTokens for Instruction {
             Rst(val) => {
                 tokens.extend(spaces.clone());
                 tokens.push(InstructionTextToken::new(
-                    &format!("{val:#06X}"),
+                    format!("{val:#06X}"),
                     InstructionTextTokenKind::PossibleAddress {
                         value: *val as u64,
                         size: None,
+                        operand: None,
                     },
-                ))
+                ));
             }
             JpHL => {
                 tokens.extend(spaces.clone());
@@ -684,7 +691,7 @@ impl ToTokens for Instruction {
 
             Nop | Rlca | Rla | Rrca | Rra | Ret(None) | Reti | Scf | Ccf | Daa | Cpl | Stop
             | Halt | Di | Ei | Illegal => {}
-        };
+        }
 
         tokens
     }
@@ -826,7 +833,7 @@ impl R16 {
 impl ToTokens for R16 {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            &format!("{self:?}"),
+            format!("{self:?}"),
             InstructionTextTokenKind::Register,
         )]
     }
@@ -914,16 +921,18 @@ impl ToTokens for Io {
                     InstructionTextTokenKind::PossibleAddress {
                         value: 0xFF00,
                         size: None,
+                        operand: None,
                     },
                 ),
                 InstructionTextToken::new("+", InstructionTextTokenKind::Text),
                 InstructionTextToken::new("C", InstructionTextTokenKind::Register),
             ],
             Io::Imm(val) => vec![InstructionTextToken::new(
-                &format!("{:#06X}", 0xFF00 + *val as u16),
+                format!("{:#06X}", 0xFF00 + *val as u16),
                 InstructionTextTokenKind::PossibleAddress {
                     value: 0xFF00 + *val as u64,
                     size: None,
+                    operand: None,
                 },
             )],
         };
@@ -960,10 +969,11 @@ impl ToTokens for AluSrc {
         match self {
             AluSrc::R8(r8) => r8.to_tokens(addr),
             AluSrc::Imm(val) => vec![InstructionTextToken::new(
-                &format!("{val:#04x}"),
+                format!("{val:#04x}"),
                 InstructionTextTokenKind::Integer {
                     value: *val as u64,
                     size: None,
+                    operand: None,
                 },
             )],
         }
@@ -1007,10 +1017,11 @@ impl fmt::Debug for BitPos {
 impl ToTokens for BitPos {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            &format!("{self:?}"),
+            format!("{self:?}"),
             InstructionTextTokenKind::Integer {
                 value: *self as u64,
                 size: None,
+                operand: None,
             },
         )]
     }
@@ -1039,7 +1050,7 @@ impl BranchCond {
 impl ToTokens for BranchCond {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            &format!("{self:?}"),
+            format!("{self:?}"),
             InstructionTextTokenKind::Text,
         )]
     }
@@ -1068,7 +1079,7 @@ impl PushPop {
 impl ToTokens for PushPop {
     fn to_tokens(&self, _addr: u64) -> Vec<InstructionTextToken> {
         vec![InstructionTextToken::new(
-            &format!("{self:?}"),
+            format!("{self:?}"),
             InstructionTextTokenKind::Register,
         )]
     }

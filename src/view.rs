@@ -1,13 +1,9 @@
 use binaryninja::{
-    architecture::{Architecture, ArchitectureExt, CoreArchitecture},
-    binary_view::{BinaryView, BinaryViewBase, BinaryViewExt, Result as BinaryViewResult},
-    custom_binary_view::{
-        BinaryViewType, BinaryViewTypeBase, CustomBinaryView, CustomBinaryViewType, CustomView,
-        CustomViewBuilder,
-    },
+    architecture::{ArchitectureExt, CoreArchitecture},
+    binary_view::{BinaryView, BinaryViewBase, CustomBinaryView, CustomBinaryViewType},
     rc::Ref,
-    section::{Section, Semantics},
-    segment::{Segment, SegmentFlags},
+    section::{Section, SectionBuilder, Semantics},
+    segment::{Segment, SegmentBuilder, SegmentFlags},
     symbol::{Symbol, SymbolType},
     types::{
         MemberAccess, MemberScope, NamedTypeReference, NamedTypeReferenceClass, Structure,
@@ -15,7 +11,6 @@ use binaryninja::{
     },
     Endianness,
 };
-use tracing::debug;
 
 const NINTENDO_LOGO: &[u8; 0x30] = b"\xCE\xED\x66\x66\xCC\x0D\x00\x0B\x03\x73\x00\x83\x00\x0C\x00\x0D\x00\x08\x11\x1F\x88\x89\x00\x0E\xDC\xCC\x6E\xE6\xDD\xDD\xD9\x99\xBB\xBB\x67\x63\x6E\x0E\xEC\xCC\xDD\xDC\x99\x9F\xBB\xB9\x33\x3E";
 const HEADER_OFFSET: u64 = 0x100;
@@ -111,25 +106,16 @@ pub static IO_REGISTERS: [(u16, &str); 71] = [
     (0xFFFF, "IE"),
 ];
 
-pub struct GameBoyViewType {
-    inner: BinaryViewType,
-}
+pub struct GameBoyViewType;
 
-impl GameBoyViewType {
-    pub fn new(view_type: BinaryViewType) -> Self {
-        Self { inner: view_type }
-    }
-}
+impl CustomBinaryViewType for GameBoyViewType {
+    type CustomBinaryView = GameBoyView;
+    const NAME: &'static str = "GameBoy";
 
-impl AsRef<BinaryViewType> for GameBoyViewType {
-    fn as_ref(&self) -> &BinaryViewType {
-        &self.inner
-    }
-}
-
-impl BinaryViewTypeBase for GameBoyViewType {
-    fn is_deprecated(&self) -> bool {
-        false
+    fn create_binary_view(&self, data: &BinaryView) -> Result<Self::CustomBinaryView, ()> {
+        Ok(GameBoyView {
+            inner: data.to_owned(),
+        })
     }
 
     fn is_valid_for(&self, data: &BinaryView) -> bool {
@@ -147,31 +133,13 @@ impl BinaryViewTypeBase for GameBoyViewType {
     }
 }
 
-impl CustomBinaryViewType for GameBoyViewType {
-    fn create_custom_view<'builder>(
-        &self,
-        data: &BinaryView,
-        builder: CustomViewBuilder<'builder, Self>,
-    ) -> BinaryViewResult<CustomView<'builder>> {
-        debug!("Creating GameBoyView from register GameBoyViewType");
-
-        builder.create::<GameBoyView>(data, ())
-    }
-}
-
 pub struct GameBoyView {
     inner: Ref<BinaryView>,
 }
 
 impl GameBoyView {
-    fn new(view: &BinaryView) -> Self {
-        Self {
-            inner: view.to_owned(),
-        }
-    }
-
-    fn add_segments_sections(&self) {
-        self.add_segment(
+    fn segments() -> Vec<SegmentBuilder> {
+        vec![
             Segment::builder(0..0x8000)
                 .parent_backing(0..0x8000)
                 .is_auto(true)
@@ -180,8 +148,6 @@ impl GameBoyView {
                     executable: true,
                     ..Default::default()
                 }),
-        );
-        self.add_segment(
             Segment::builder(0x8000..0x10000)
                 .is_auto(true)
                 .flags(SegmentFlags {
@@ -190,36 +156,30 @@ impl GameBoyView {
                     executable: true,
                     ..Default::default()
                 }),
-        );
+        ]
+    }
 
-        self.add_section(
+    fn sections() -> Vec<SectionBuilder> {
+        vec![
             Section::builder("ISR".to_string(), 0..0x100)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyCode),
-        );
-        self.add_section(
             Section::builder("EntryPoint".to_string(), 0x100..0x104)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyCode),
-        );
-        self.add_section(
             Section::builder("HDR".to_string(), 0x104..0x150)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyData),
-        );
-        self.add_section(
             Section::builder("ROM".to_string(), 0x150..0x8000)
                 .is_auto(true)
                 .semantics(Semantics::ReadOnlyCode),
-        );
-        self.add_section(
             Section::builder("RAM".to_string(), 0x8000..0x10000)
                 .is_auto(true)
                 .semantics(Semantics::ReadWriteData),
-        );
+        ]
     }
 
-    fn apply_header_type(&self) -> BinaryViewResult<()> {
+    fn header_type() -> Ref<Type> {
         let new_title = Type::array(&Type::char(), 0x10);
         let old_title = Type::structure(
             Structure::builder()
@@ -343,54 +303,7 @@ impl GameBoyView {
                 .finalize()
                 .as_ref(),
         );
-        let type_name = self.define_auto_type("GB_HEADER", "gb", &header_type);
-        let named_type = Type::named_type(&NamedTypeReference::new(
-            NamedTypeReferenceClass::StructNamedTypeClass,
-            type_name,
-        ));
-
-        let symbol = Symbol::builder(SymbolType::Data, "gb_header", 0x104).create();
-        self.define_auto_symbol_with_type(
-            symbol.as_ref(),
-            self.default_platform().unwrap().as_ref(),
-            named_type.as_ref(),
-        )?;
-        Ok(())
-    }
-
-    fn define_symbols(&self) {
-        self.define_auto_symbol(
-            Symbol::builder(SymbolType::Function, "_start", self.entry_point())
-                .create()
-                .as_ref(),
-        );
-        for (addr, name) in INTERRUPT_HANDLERS.into_iter() {
-            self.define_auto_symbol(
-                Symbol::builder(SymbolType::Function, name, addr as u64)
-                    .create()
-                    .as_ref(),
-            )
-        }
-        for (addr, name) in IO_REGISTERS.into_iter() {
-            self.define_auto_data_var(addr as u64, &Type::int(1, false));
-            self.define_auto_symbol(
-                Symbol::builder(SymbolType::Data, name, addr as u64)
-                    .create()
-                    .as_ref(),
-            )
-        }
-    }
-
-    fn init(&self) -> BinaryViewResult<()> {
-        let arch = CoreArchitecture::by_name("gb").ok_or(())?;
-        let platform = arch.standalone_platform().ok_or(())?;
-        self.set_default_arch(&arch);
-        self.set_default_platform(&platform);
-        self.add_segments_sections();
-        self.apply_header_type()?;
-        self.add_entry_point(self.entry_point());
-        self.define_symbols();
-        Ok(())
+        header_type
     }
 }
 
@@ -402,11 +315,11 @@ impl AsRef<BinaryView> for GameBoyView {
 
 impl BinaryViewBase for GameBoyView {
     fn address_size(&self) -> usize {
-        self.default_arch().unwrap().address_size()
+        2
     }
 
     fn default_endianness(&self) -> Endianness {
-        self.default_arch().unwrap().endianness()
+        Endianness::LittleEndian
     }
 
     fn entry_point(&self) -> u64 {
@@ -414,14 +327,66 @@ impl BinaryViewBase for GameBoyView {
     }
 }
 
-unsafe impl CustomBinaryView for GameBoyView {
-    type Args = ();
+impl CustomBinaryView for GameBoyView {
+    fn initialize(&mut self, view: &BinaryView) -> bool {
+        let Some(arch) = CoreArchitecture::by_name("gb") else {
+            return false;
+        };
+        let Some(platform) = arch.standalone_platform() else {
+            return false;
+        };
 
-    fn new(handle: &BinaryView, _args: &Self::Args) -> BinaryViewResult<Self> {
-        Ok(Self::new(handle))
-    }
+        view.set_default_arch(&arch);
+        view.set_default_platform(&platform);
 
-    fn init(&mut self, _args: Self::Args) -> BinaryViewResult<()> {
-        GameBoyView::init(self)
+        for segment in Self::segments() {
+            view.add_segment(segment);
+        }
+        for section in Self::sections() {
+            view.add_section(section);
+        }
+
+        view.add_entry_point(self.entry_point());
+
+        let header_type = Self::header_type();
+        let type_name = view.define_auto_type("GB_HEADER", "gb", &header_type);
+        let named_type = Type::named_type(&NamedTypeReference::new(
+            NamedTypeReferenceClass::StructNamedTypeClass,
+            type_name,
+        ));
+        let symbol = Symbol::builder(SymbolType::Data, "gb_header", 0x104).create();
+        let defined_symbol = view.define_auto_symbol_with_type(
+            symbol.as_ref(),
+            platform.as_ref(),
+            named_type.as_ref(),
+        );
+
+        tracing::info!(
+            "{:?}\n {:?}",
+            defined_symbol,
+            view.data_variable_at_address(0x104)
+        );
+
+        view.define_auto_symbol(
+            Symbol::builder(SymbolType::Function, "_start", self.entry_point())
+                .create()
+                .as_ref(),
+        );
+        for (addr, name) in INTERRUPT_HANDLERS {
+            view.define_auto_symbol(
+                Symbol::builder(SymbolType::Function, name, addr as u64)
+                    .create()
+                    .as_ref(),
+            );
+        }
+        for (addr, name) in IO_REGISTERS {
+            view.define_auto_data_var(addr as u64, &Type::int(1, false));
+            view.define_auto_symbol(
+                Symbol::builder(SymbolType::Data, name, addr as u64)
+                    .create()
+                    .as_ref(),
+            );
+        }
+        true
     }
 }

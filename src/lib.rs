@@ -1,10 +1,11 @@
 use binaryninja::{
     architecture::register_architecture,
-    custom_binary_view::{register_view_type, BinaryViewTypeExt},
+    binary_view::{register_binary_view_type, BinaryViewType, CustomBinaryViewType},
     Endianness,
 };
 
 use arch::GameBoy;
+use view::GameBoyViewType;
 
 mod arch;
 mod flag;
@@ -16,7 +17,10 @@ pub extern "C" fn CorePluginInit() -> bool {
     binaryninja::tracing_init!("BinjaBoy");
 
     let arch = register_architecture("gb", GameBoy::new);
-    let bv = register_view_type("GameBoy", "GameBoy", view::GameBoyViewType::new);
-    bv.register_arch(0, Endianness::LittleEndian, arch);
+    register_binary_view_type(GameBoyViewType);
+
+    if let Some(bv) = BinaryViewType::by_name(GameBoyViewType::NAME) {
+        bv.register_arch(0, Endianness::LittleEndian, arch);
+    }
     true
 }

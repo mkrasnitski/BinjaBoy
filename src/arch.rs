@@ -78,7 +78,7 @@ impl Architecture for GameBoy {
                 } else {
                     info.add_branch(BranchKind::Unconditional(
                         next_instr.wrapping_add_signed(offset as i16) as u64,
-                    ))
+                    ));
                 }
             }
             Instruction::Jp(cond, addr) => {
@@ -86,14 +86,14 @@ impl Architecture for GameBoy {
                     info.add_branch(BranchKind::True(addr as u64));
                     info.add_branch(BranchKind::False(next_instr as u64));
                 } else {
-                    info.add_branch(BranchKind::Unconditional(addr as u64))
+                    info.add_branch(BranchKind::Unconditional(addr as u64));
                 }
             }
             Instruction::JpHL => info.add_branch(BranchKind::Indirect),
             Instruction::Call(_, addr) => info.add_branch(BranchKind::Call(addr as u64)),
             Instruction::Ret(Some(_)) => {} // conditional returns don't end the block
             Instruction::Ret(None) | Instruction::Reti => {
-                info.add_branch(BranchKind::FunctionReturn)
+                info.add_branch(BranchKind::FunctionReturn);
             }
             // unsure if this is correct - binja's z80 support doesn't do this
             Instruction::Rst(addr) => info.add_branch(BranchKind::Call(addr as u64)),
@@ -163,12 +163,11 @@ impl Architecture for GameBoy {
     }
 
     fn register_from_id(&self, id: RegisterId) -> Option<Self::Register> {
-        match id.try_into() {
-            Ok(flag) => Some(flag),
-            Err(()) => {
-                error!("invalid register id {id}");
-                None
-            }
+        if let Ok(flag) = id.try_into() {
+            Some(flag)
+        } else {
+            error!("invalid register id {id}");
+            None
         }
     }
 
